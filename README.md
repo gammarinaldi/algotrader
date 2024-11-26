@@ -31,4 +31,4 @@ This platform depends on Amibroker for trading strategy setup, backtesting, and 
 
 ## License
 
-This project is licensed under the MIT License. See the [https://github.com/gammarinaldi/algotrader?tab=MIT-1-ov-file](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/gammarinaldi/algotrader?tab=MIT-1-ov-file) file for details.
