@@ -1,24 +1,19 @@
 import requests
-import json
 
-def call(user):
+def call(pin_token):
     try:
-        url = "https://ht2.ajaib.co.id/api/v7/login/"
+        url = "https://ht2.ajaib.co.id/api/v3/users/me/pin/get-pin-data"
 
-        payload = json.dumps({
-            "email": user["email"],
-            "password": user["password"],
-            "platform": "web"
-        })
+        payload={}
 
         headers = {
-            'accept': '*/*',
+            'accept': 'application/json, text/plain, */*',
             'accept-language': 'id',
-            'content-type': 'application/json',
+            'authorization': pin_token,
             'dnt': '1',
-            'origin': 'https://login.ajaib.co.id',
+            'origin': 'https://invest.ajaib.co.id',
             'priority': 'u=1, i',
-            'referer': 'https://login.ajaib.co.id/',
+            'referer': 'https://invest.ajaib.co.id/',
             'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
@@ -33,7 +28,7 @@ def call(user):
             'x-product': 'stock-mf'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.request("GET", url, headers=headers, data=payload)
 
         return response
     except requests.exceptions.HTTPError as errh:

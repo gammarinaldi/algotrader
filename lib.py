@@ -4,6 +4,9 @@ import brokers.ajaib.order
 import brokers.ajaib.portfolio
 import brokers.ajaib.auto_trading_list
 import brokers.ajaib.delete_auto_trade
+import brokers.ajaib.profile
+import brokers.ajaib.get_pin_data
+import brokers.ajaib.validate_pin
 
 import concurrent.futures
 import csv
@@ -84,14 +87,28 @@ def get_result():
             return msg
 
 def do_login(user):
+    # Login
     res = brokers.ajaib.login.call(user)
     if res.status_code == 200:
         data = res.json()
-        access_token = "jwt " + data["access_token"]
+        pin_token = "jwt " + data["pin_token"]
+        
+        # Get pin data
+        pin_res = brokers.ajaib.get_pin_data.call(pin_token)
+        if pin_res.status_code == 200:
+            # Validate pin
+            validate_pin_res = brokers.ajaib.validate_pin.call(pin_token, user["pin"])
+            if validate_pin_res.status_code == 200:
+                access_token = "jwt " + validate_pin_res["result"]["access_token"]
+            else:
+                access_token = ""
+        else:
+            access_token = ""
+            
         msg = user["email"] + ": login OK"
         print(msg)
         LOG.append(msg)
-        return res.status_code, data, access_token
+        return validate_pin_res.status_code, access_token
     else:
         msg = user["email"] + ": login error: " + res.text
         LOG.append(msg)
@@ -162,20 +179,24 @@ def get_portfolio(access_token, user):
         msg = user["email"] + ": get portfolio error: " + porto_res.text
         LOG.append(msg)
 
-def position_size(access_token):
-    # porto = portfolio.call(access_token)
-    # data_porto = porto.json()
-    # trading_limit = data_porto["result"]["trading_limit"]
-    trading_limit = 4_000_000
-    amount = trading_limit / 4
-    return amount
+def position_size(access_token, user):
+    profile_res = brokers.ajaib.profile.call(access_token)
+    if profile_res.status_code == 200:
+        data_profile = profile_res.json()
+        trading_limit = data_profile["result"]["cash_available"]
+        amount = trading_limit / 5
+        return amount
+    else:
+        msg = user["email"] + ": get position size error: " + profile_res.text
+        LOG.append(msg)
+        return 0
 
 def buy(user, list_order):
     LOG.append("Order Buy Report:")
-    login_status, data, access_token = do_login(user)
+    login_status, access_token = do_login(user)
     if login_status == 200:
-        access_token = "jwt " + data["access_token"]
-        amount = position_size(access_token)
+        amount = position_size(access_token, user)
+
         for obj in list_order:
             res = brokers.ajaib.order.create_buy(access_token, obj.emiten, obj.buy_price, amount)
             if res.status_code == 200:
@@ -189,12 +210,12 @@ def buy(user, list_order):
         
         do_logout(access_token, user)
     else:
-        msg = user["email"] + ": login error: " + res.text
+        msg = user["email"] + ": login error when buy: " + res.text
         LOG.append(msg)
 
 def sell(user, list_order):
     LOG.append("Order Sell Report:")
-    login_status, _, access_token = do_login(user)
+    login_status, access_token = do_login(user)
     if login_status == 200:
         portfolio = get_portfolio(access_token, user)
         if isinstance(portfolio, list) and portfolio != []:
@@ -231,7 +252,14 @@ def sell(user, list_order):
                         LOG.append(msg)
                 else:
                     LOG.append(user["email"] + ": setup sell " + emiten + " failed, not exists in portolio")
+        else:
+            msg = user["email"] + ": portfolio is empty"
+            LOG.append(msg)
+            
         do_logout(access_token, user)
+    else:
+        msg = user["email"] + ": login error when sell: " + res.text
+        LOG.append(msg)
     
 def async_order(side, list_order, bot):
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -245,7 +273,7 @@ def async_order(side, list_order, bot):
                     print(user["email"] + ": RESULT ERROR")
                     print(future.result())
             except Exception:
-                _, _, tele_log_id = get_tele_data()
+                _, tele_log_id = get_tele_data()
                 error_log(bot, tele_log_id)
 
 def executor_submit(side, executor, list_order):

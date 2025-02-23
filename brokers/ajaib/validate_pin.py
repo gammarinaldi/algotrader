@@ -1,24 +1,23 @@
 import requests
 import json
 
-def call(user):
+def call(pin_token, pin):
     try:
-        url = "https://ht2.ajaib.co.id/api/v7/login/"
+        url = "https://ht2.ajaib.co.id/api/v4/users/me/pin/validate/"
 
         payload = json.dumps({
-            "email": user["email"],
-            "password": user["password"],
-            "platform": "web"
+            "pin_code": pin
         })
 
         headers = {
             'accept': '*/*',
             'accept-language': 'id',
+            'authorization': pin_token,
             'content-type': 'application/json',
             'dnt': '1',
-            'origin': 'https://login.ajaib.co.id',
+            'origin': 'https://invest.ajaib.co.id',
             'priority': 'u=1, i',
-            'referer': 'https://login.ajaib.co.id/',
+            'referer': 'https://invest.ajaib.co.id/',
             'sec-ch-ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
