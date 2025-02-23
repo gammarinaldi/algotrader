@@ -1,7 +1,7 @@
 import csv
 import time
 import lib
-import gsheet.process
+# import gsheet.process
 
 if __name__ == '__main__':
     print("Algotrader is starting...")
