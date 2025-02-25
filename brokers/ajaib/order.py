@@ -70,12 +70,15 @@ def create_buy(access_token, emiten, buy_price, amount):
 def create_sell(access_token, emiten, value, lot, comparator):
     try:
         url = "https://ht2.ajaib.co.id/api/v1/stock/auto-trading/?account_type=REG"
+        
         start = today + timedelta(days=1)
         end = start + timedelta(days=30)
         start_date = start.strftime("%Y-%m-%d")
         end_date = end.strftime("%Y-%m-%d")
+        
         trigger_price = int(value)
         order_price = int(value) - lib.tick(int(value))
+        
         payload = json.dumps({
             "code": emiten,
             "side": "SELL",

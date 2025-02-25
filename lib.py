@@ -1,10 +1,10 @@
+import brokers.ajaib.get_buying_power
 import brokers.ajaib.login
 import brokers.ajaib.logout
 import brokers.ajaib.order
 import brokers.ajaib.portfolio
 import brokers.ajaib.auto_trading_list
 import brokers.ajaib.delete_auto_trade
-import brokers.ajaib.profile
 import brokers.ajaib.get_pin_data
 import brokers.ajaib.validate_pin
 
@@ -101,13 +101,20 @@ def do_login(user):
             if validate_pin_res.status_code == 200:
                 access_token = "jwt " + validate_pin_res["result"]["access_token"]
             else:
+                msg = user["email"] + ": validate pin error: " + validate_pin_res.text
+                print(msg)
+                LOG.append(msg)
                 access_token = ""
         else:
+            msg = user["email"] + ": get pin data error: " + pin_res.text
+            print(msg)
+            LOG.append(msg)
             access_token = ""
             
         msg = user["email"] + ": login OK"
         print(msg)
         LOG.append(msg)
+        
         return validate_pin_res.status_code, access_token
     else:
         msg = user["email"] + ": login error: " + res.text
@@ -180,14 +187,14 @@ def get_portfolio(access_token, user):
         LOG.append(msg)
 
 def position_size(access_token, user):
-    profile_res = brokers.ajaib.profile.call(access_token)
-    if profile_res.status_code == 200:
-        data_profile = profile_res.json()
-        trading_limit = data_profile["result"]["cash_available"]
+    buying_power_res = brokers.ajaib.get_buying_power.call(access_token)
+    if buying_power_res.status_code == 200:
+        data_buying_power = buying_power_res.json()
+        trading_limit = data_buying_power["result"]["trading_limit"]
         amount = trading_limit / 5
         return amount
     else:
-        msg = user["email"] + ": get position size error: " + profile_res.text
+        msg = user["email"] + ": get position size error: " + buying_power_res.text
         LOG.append(msg)
         return 0
 
@@ -210,7 +217,7 @@ def buy(user, list_order):
         
         do_logout(access_token, user)
     else:
-        msg = user["email"] + ": login error when buy: " + res.text
+        msg = user["email"] + ": login error when buy"
         LOG.append(msg)
 
 def sell(user, list_order):
@@ -258,7 +265,7 @@ def sell(user, list_order):
             
         do_logout(access_token, user)
     else:
-        msg = user["email"] + ": login error when sell: " + res.text
+        msg = user["email"] + ": login error when sell"
         LOG.append(msg)
     
 def async_order(side, list_order, bot):
