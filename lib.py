@@ -16,10 +16,12 @@ import traceback
 import os
 import time
 import users
+import asyncio
 
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 LOG = []
@@ -99,6 +101,8 @@ def do_login(user):
             # Validate pin
             validate_pin_res = brokers.ajaib.validate_pin.call(pin_token, user["pin"])
             if validate_pin_res.status_code == 200:
+                response = validate_pin_res  # Store the response object
+                validate_pin_res = validate_pin_res.json()  # Convert to JSON
                 access_token = "jwt " + validate_pin_res["result"]["access_token"]
             else:
                 msg = user["email"] + ": validate pin error: " + validate_pin_res.text
@@ -115,7 +119,7 @@ def do_login(user):
         print(msg)
         LOG.append(msg)
         
-        return validate_pin_res.status_code, access_token
+        return response.status_code, access_token
     else:
         msg = user["email"] + ": login error: " + res.text
         LOG.append(msg)
@@ -268,9 +272,9 @@ def sell(user, list_order):
         msg = user["email"] + ": login error when sell"
         LOG.append(msg)
     
-def async_order(side, list_order, bot):
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_user = executor_submit(side, executor, list_order)
+def async_order(order_type, list_order, bot):
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_user = executor_submit(order_type, executor, list_order)
         for future in concurrent.futures.as_completed(future_to_user):
             user = future_to_user[future]
             try:
@@ -279,12 +283,12 @@ def async_order(side, list_order, bot):
                 else:
                     print(user["email"] + ": RESULT ERROR")
                     print(future.result())
-            except Exception:
-                _, tele_log_id = get_tele_data()
+            except Exception as _:
+                _, _, tele_log_id = get_tele_data()
                 error_log(bot, tele_log_id)
 
-def executor_submit(side, executor, list_order):
-    if side == "buy":
+def executor_submit(order_type, executor, list_order):
+    if order_type == "buy":
         return {executor.submit(buy, user, list_order): user for user in users.list}
     else:
         return {executor.submit(sell, user, list_order): user for user in users.list}
@@ -301,8 +305,11 @@ def tick(price):
     else: 
         return 25
 
+async def send_telegram_message(bot, chat_id, message):
+    await bot.send_message(chat_id=chat_id, text=message)
+
 def send_log(bot, chat_id, log):
-    bot.send_message(chat_id=chat_id, text=join_msg(log))
+    asyncio.run(send_telegram_message(bot, chat_id, join_msg(log)))
 
 def join_msg(list):
     if list:
@@ -319,4 +326,4 @@ def error_log(bot, chat_id):
     logger = logging.getLogger(__name__)
     error_msg = traceback.format_exc()
     logger.debug(error_msg)
-    bot.send_message(chat_id=chat_id, text=error_msg)
+    asyncio.run(send_telegram_message(bot, chat_id, error_msg))

@@ -1,6 +1,7 @@
 import csv
 import time
 import lib
+import os
 # import gsheet.process
 
 if __name__ == '__main__':
@@ -8,8 +9,13 @@ if __name__ == '__main__':
 
     bot, tele_chat_ids, tele_log_id = lib.get_tele_bot()
     enable_signal, enable_buy, enable_sell, sell_delay, dir_path = lib.get_env()
+    print(f"Working directory: {dir_path}")
 
     try:
+        # Use os.path.join for cross-platform path handling
+        signals_dir = os.path.join(dir_path, "signals")
+        os.makedirs(signals_dir, exist_ok=True)
+        
         result = lib.get_result()
         
         if isinstance(result, str):
@@ -32,7 +38,7 @@ if __name__ == '__main__':
                     writer.writerow([emiten, signal_date, buy_price, take_profit, cut_loss]) #this is the data
                     file.close()                
 
-                msg = "💌 Rekomendasi Algo Trader \(" + signal_date + "\)\n\n*Buy $" + emiten + "\nBuy @" + buy_price + "\nTake Profit @" + take_profit + "\nCutloss @" + cut_loss + "*\n\n_Disclaimer ON\. DYOR\._"
+                msg = "💌 Rekomendasi Algo Trader (" + signal_date + ")\n\n*Buy $" + emiten + "\nBuy @" + buy_price + "\nTake Profit @" + take_profit + "\nCutloss @" + cut_loss + "*\n\n_Disclaimer ON. DYOR._"
                 print(msg)
 
                 # Send signal to telegram
@@ -58,7 +64,7 @@ if __name__ == '__main__':
             # Perform auto order sell
             if enable_sell == "TRUE":
                 print('Wait 1 hour to create auto sell order')
-                time.sleep(int(sell_delay))
+                time.sleep(3600)
 
                 t1 = time.time()
 
