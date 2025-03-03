@@ -89,41 +89,40 @@ def get_result():
             return msg
 
 def do_login(user):
-    # Login
-    res = brokers.ajaib.login.call(user)
-    if res.status_code == 200:
-        data = res.json()
-        pin_token = "jwt " + data["pin_token"]
+    try:
+        print(f"Attempting login for user: {user['email']}")
+        res = brokers.ajaib.login.call(user)
+        print(f"Login response received for {user['email']}")
         
-        # Get pin data
-        pin_res = brokers.ajaib.get_pin_data.call(pin_token)
-        if pin_res.status_code == 200:
-            # Validate pin
-            validate_pin_res = brokers.ajaib.validate_pin.call(pin_token, user["pin"])
-            if validate_pin_res.status_code == 200:
-                response = validate_pin_res  # Store the response object
-                validate_pin_res = validate_pin_res.json()  # Convert to JSON
-                access_token = "jwt " + validate_pin_res["result"]["access_token"]
-            else:
-                msg = user["email"] + ": validate pin error: " + validate_pin_res.text
-                print(msg)
-                LOG.append(msg)
-                access_token = ""
-        else:
-            msg = user["email"] + ": get pin data error: " + pin_res.text
-            print(msg)
-            LOG.append(msg)
-            access_token = ""
+        # Handle tuple response which indicates connection error
+        if isinstance(res, tuple):
+            error_msg = f"Connection error for {user['email']}: {res[1]}"
+            print(error_msg)
+            LOG.append(error_msg)
+            return False, None
             
-        msg = user["email"] + ": login OK"
-        print(msg)
-        LOG.append(msg)
-        
-        return response.status_code, access_token
-    else:
-        msg = user["email"] + ": login error: " + res.text
-        LOG.append(msg)
-        return res.status_code, data, ""
+        if hasattr(res, 'status_code'):
+            print(f"Response status code: {res.status_code}")
+            if res.status_code == 200:
+                token = res.json().get('access_token')
+                print(f"Login successful for {user['email']}")
+                return True, token
+            else:
+                error_msg = f"Login failed for {user['email']} with status code {res.status_code}"
+                print(error_msg)
+                LOG.append(error_msg)
+        else:
+            error_msg = f"Unexpected response type for {user['email']}: {type(res)}"
+            print(error_msg)
+            LOG.append(error_msg)
+            
+        return False, None
+    except Exception as e:
+        error_msg = f"Login error for {user['email']}: {str(e)}"
+        print(error_msg)
+        LOG.append(error_msg)
+        print(f"Exception type: {type(e)}")
+        return False, None
 
 def do_logout(access_token, user):
     res = brokers.ajaib.logout.call(access_token)
@@ -205,7 +204,7 @@ def position_size(access_token, user):
 def buy(user, list_order):
     LOG.append("Order Buy Report:")
     login_status, access_token = do_login(user)
-    if login_status == 200:
+    if login_status:
         amount = position_size(access_token, user)
 
         for obj in list_order:
@@ -227,7 +226,7 @@ def buy(user, list_order):
 def sell(user, list_order):
     LOG.append("Order Sell Report:")
     login_status, access_token = do_login(user)
-    if login_status == 200:
+    if login_status:
         portfolio = get_portfolio(access_token, user)
         if isinstance(portfolio, list) and portfolio != []:
             check_position(access_token, portfolio, user)
@@ -273,17 +272,26 @@ def sell(user, list_order):
         LOG.append(msg)
     
 def async_order(order_type, list_order, bot):
+    print(f"Starting async_order with type: {order_type}")
+    print(f"Number of orders to process: {len(list_order)}")
+    
     with ThreadPoolExecutor(max_workers=5) as executor:
+        print("Created thread pool executor")
         future_to_user = executor_submit(order_type, executor, list_order)
+        print(f"Submitted {len(future_to_user)} tasks to executor")
+        
         for future in concurrent.futures.as_completed(future_to_user):
             user = future_to_user[future]
             try:
-                if future.result() == None:
-                    print(user["email"] + ": RESULT OK")
+                print(f"Processing result for user: {user['email']}")
+                result = future.result()
+                if result is None:
+                    print(f"{user['email']}: RESULT OK")
                 else:
-                    print(user["email"] + ": RESULT ERROR")
-                    print(future.result())
-            except Exception as _:
+                    print(f"{user['email']}: RESULT ERROR")
+                    print(f"Error details: {result}")
+            except Exception as e:
+                print(f"Exception while processing future for {user['email']}: {str(e)}")
                 _, _, tele_log_id = get_tele_data()
                 error_log(bot, tele_log_id)
 
@@ -309,7 +317,25 @@ async def send_telegram_message(bot, chat_id, message):
     await bot.send_message(chat_id=chat_id, text=message)
 
 def send_log(bot, chat_id, log):
-    asyncio.run(send_telegram_message(bot, chat_id, join_msg(log)))
+    print("Attempting to send log messages")
+    print(f"Number of log messages: {len(log)}")
+    try:
+        message = join_msg(log)
+        print(f"Combined message length: {len(message)}")
+        # Split message if too long (Telegram has a 4096 character limit)
+        max_length = 4000  # Leave some margin
+        if len(message) > max_length:
+            print("Message too long, splitting into chunks")
+            chunks = [message[i:i+max_length] for i in range(0, len(message), max_length)]
+            for i, chunk in enumerate(chunks):
+                print(f"Sending chunk {i+1}/{len(chunks)}")
+                asyncio.run(send_telegram_message(bot, chat_id, chunk))
+        else:
+            print("Sending single message")
+            asyncio.run(send_telegram_message(bot, chat_id, message))
+    except Exception as e:
+        print(f"Error sending log: {str(e)}")
+        print(f"Exception type: {type(e)}")
 
 def join_msg(list):
     if list:

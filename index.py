@@ -50,16 +50,19 @@ if __name__ == '__main__':
 
             # Perform auto order buy
             if enable_buy == "TRUE":
-                t1 = time.time()
-
-                # Async buy
-                lib.async_order("buy", list_order, bot)
-
-                t2 = time.time()
-                diff = t2 -t1
-                print("Processing auto-buy order takes: " + str(round(diff, 2)) + " secs.")
-                lib.send_log(bot, tele_log_id, lib.LOG)
-                lib.LOG = []
+                try:
+                    t1 = time.time()
+                    lib.async_order("buy", list_order, bot)
+                    t2 = time.time()
+                    diff = t2 - t1
+                    print("Processing auto-buy order takes: " + str(round(diff, 2)) + " secs.")
+                    # Send logs in a single call
+                    if lib.LOG:
+                        lib.send_log(bot, tele_log_id, lib.LOG)
+                        lib.LOG = []
+                except Exception as e:
+                    print(f"Error during buy order: {e}")
+                    lib.error_log(bot, tele_log_id)
 
             # Perform auto order sell
             if enable_sell == "TRUE":
