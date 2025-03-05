@@ -1,13 +1,13 @@
 import requests
 
-def call(email, password, proxies):
+def call(email, password):
     try:
         url = f"https://api.stockbit.com/v2.4/login?user={email}&password={password}"
-
+        print(email, password)
         payload={}
         headers = {}
-        response = requests.request("POST", url, headers=headers, data=payload, proxies=proxies)
-
+        response = requests.request("POST", url, headers=headers, data=payload)
+        
         return response
     except requests.exceptions.HTTPError as errh:
         return "Http Error: ", errh

@@ -1,12 +1,24 @@
-import brokers.ajaib.get_buying_power
-import brokers.ajaib.login
-import brokers.ajaib.logout
-import brokers.ajaib.order
-import brokers.ajaib.portfolio
-import brokers.ajaib.auto_trading_list
-import brokers.ajaib.delete_auto_trade
-import brokers.ajaib.get_pin_data
-import brokers.ajaib.validate_pin
+# import brokers.ajaib.get_buying_power
+# import brokers.ajaib.login
+# import brokers.ajaib.logout
+# import brokers.ajaib.order
+# import brokers.ajaib.portfolio
+# import brokers.ajaib.auto_trading_list
+# import brokers.ajaib.delete_auto_trade
+# import brokers.ajaib.get_pin_data
+# import brokers.ajaib.validate_pin
+
+import brokers.stockbit.cancel_smart_order
+import brokers.stockbit.login
+import brokers.stockbit.get_security_token
+import brokers.stockbit.login_security
+import brokers.stockbit.portfolio
+import brokers.stockbit.get_buying_power
+import brokers.stockbit.order_list
+import brokers.stockbit.trade_list
+import brokers.stockbit.buy
+import brokers.stockbit.sell
+import brokers.stockbit.logout
 
 import concurrent.futures
 import csv
@@ -17,6 +29,7 @@ import os
 import time
 import users
 import asyncio
+from math import floor
 
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
@@ -91,7 +104,7 @@ def get_result():
 def do_login(user):
     try:
         print(f"Attempting login for user: {user['email']}")
-        res = brokers.ajaib.login.call(user)
+        res = brokers.stockbit.login.call(user['email'], user['password'])
         print(f"Login response received for {user['email']}")
         
         # Handle tuple response which indicates connection error
@@ -104,9 +117,22 @@ def do_login(user):
         if hasattr(res, 'status_code'):
             print(f"Response status code: {res.status_code}")
             if res.status_code == 200:
-                token = res.json().get('access_token')
-                print(f"Login successful for {user['email']}")
-                return True, token
+                security_token_status, security_token = get_security_token(user, res.json()['data']['access_token'])
+                if security_token_status:
+                    login_security_status, access_token_sekuritas = do_login_security(user, security_token)
+                    if login_security_status:
+                        print(f"Login security successful for user: {user['email']}")
+                        return True, access_token_sekuritas
+                    else:
+                        print(f"Login security failed for user: {user['email']}")
+                        msg = user["email"] + ": login security error"
+                        LOG.append(msg)
+                        return False, None
+                else:
+                    print(f"Security token error for user: {user['email']}")
+                    msg = user["email"] + ": get security token error"
+                    LOG.append(msg)
+                    return False, None
             else:
                 error_msg = f"Login failed for {user['email']} with status code {res.status_code}"
                 print(error_msg)
@@ -123,14 +149,35 @@ def do_login(user):
         LOG.append(error_msg)
         print(f"Exception type: {type(e)}")
         return False, None
-
-def do_logout(access_token, user):
-    res = brokers.ajaib.logout.call(access_token)
+    
+def get_security_token(user, access_token):
+    print(f"Attempting get security token for user: {user['email']}")
+    res = brokers.stockbit.get_security_token.call(access_token)
     if res.status_code == 200:
+        print(f"Security token received for user: {user['email']}")
+        return True, res.json()['data']['token']
+    else:
+        return False, None
+    
+def do_login_security(user, security_token):
+    print(f"Attempting login security for user: {user['email']}")
+    res = brokers.stockbit.login_security.call(user, security_token)
+    if res.status_code == 200:
+        print(f"Login security successful for user: {user['email']}")
+        return True, res.json()['data']['access_token']
+    else:
+        return False, None
+
+def do_logout(access_token_sekuritas, user):
+    print(f"Attempting logout for user: {user['email']}")
+    res = brokers.stockbit.logout.call(access_token_sekuritas)
+    if res.status_code == 200:
+        print(f"Logout successful for user: {user['email']}")
         msg = user["email"] + ": logout OK"
         LOG.append(msg)
     else:
         msg = user["email"] + ": logout error: " + res.text
+        print(msg)
         LOG.append(msg)
 
 def get_signal_history():
@@ -145,56 +192,60 @@ def get_signal_history():
         file.close()
     return list
 
-def check_position(access_token, porto_dicts, user):
+def check_position(access_token_sekuritas, portofolio_dicts, user):
     print('Check position...')
-    res = brokers.ajaib.auto_trading_list.call(access_token)
+    res = brokers.stockbit.order_list.call(access_token_sekuritas)
     if res.status_code == 200:
         data = res.json()
-        at_list_dicts = data["results"]
+        order_list_dicts = data['data']
 
-        for item in porto_dicts:
-            emiten = item['stock']
-            lot = int(item['lot'])
-            dicts = [i for i in at_list_dicts if i['code'] == emiten]
+        for item in portofolio_dicts:
+            emiten = item['symbol']
+            lot = int(item['qty']['available']['lot'])
+            dicts = [i for i in order_list_dicts if i['symbol'] == emiten]
+            
             if len(dicts) == 2:
                 print(emiten + ': Position ok')
             elif len(dicts) == 1:
                 signal_history_dicts = [i for i in get_signal_history() if i[0] == emiten]
+                
                 for item in signal_history_dicts[-1]:
-                    h_emiten = item[0]
-                    h_tp = item[3]
-                    h_cl = item[4]
-                    if h_emiten == emiten:
-                        comparator = dicts[0]['comparator']
-                        if comparator == 'LTE':
+                    history_emiten = item[0]
+                    history_take_profit = item[3]
+                    history_cut_loss = item[4]
+                    
+                    if history_emiten == emiten:
+                        smart_order_type = dicts[0]['smart_order']['label']
+                        if smart_order_type == 'TP':
                             print('Re-create auto sell for take profit')
-                            brokers.ajaib.order.create_sell(access_token, emiten, h_tp, lot, "GTE")
+                            brokers.stockbit.sell.call(access_token_sekuritas, emiten, history_take_profit, lot, "TP")
                         else:
                             print('Re-create auto sell for cut loss')
-                            brokers.ajaib.order.create_sell(access_token, emiten, h_cl, lot, "LTE")
+                            brokers.stockbit.sell.call(access_token_sekuritas, emiten, history_cut_loss, lot, "SL")
             else:
                 print('Remove unused auto trade setup')
-                for trade in at_list_dicts:
-                    brokers.ajaib.delete_auto_trade.call(access_token, trade['id'])
+                for order in order_list_dicts:
+                    brokers.stockbit.cancel_smart_order.call(access_token_sekuritas, order['smart_order']['order_id'])
     else:
         msg = user["email"] + ": check position error: " + res.text
         LOG.append(msg)
 
 def get_portfolio(access_token, user):
-    porto_res = brokers.ajaib.portfolio.call(access_token)
+    print(f"Attempting get portfolio for user: {user['email']}")
+    porto_res = brokers.stockbit.portfolio.call(access_token)
     if porto_res.status_code == 200:
-        porto_data = porto_res.json()
-        return porto_data["result"]["portfolio"]
+        return porto_res.json()["data"]["results"]
     else:
         msg = user["email"] + ": get portfolio error: " + porto_res.text
         LOG.append(msg)
 
 def position_size(access_token, user):
-    buying_power_res = brokers.ajaib.get_buying_power.call(access_token)
+    print(f"Attempting get position size for user: {user['email']}")
+    buying_power_res = brokers.stockbit.get_buying_power.call(access_token)
     if buying_power_res.status_code == 200:
         data_buying_power = buying_power_res.json()
-        trading_limit = data_buying_power["result"]["trading_limit"]
-        amount = trading_limit / 5
+        trading_limit = data_buying_power['data']['summary']['trading']['balance']
+        amount = trading_limit / 3
         return amount
     else:
         msg = user["email"] + ": get position size error: " + buying_power_res.text
@@ -202,73 +253,141 @@ def position_size(access_token, user):
         return 0
 
 def buy(user, list_order):
+    print(f"Attempting to buy for user: {user['email']}")
     LOG.append("Order Buy Report:")
     login_status, access_token = do_login(user)
+    
     if login_status:
         amount = position_size(access_token, user)
+        print(f"Amount: {amount}")
 
         for obj in list_order:
-            res = brokers.ajaib.order.create_buy(access_token, obj.emiten, obj.buy_price, amount)
+            lot = floor(( amount / float(obj.buy_price)) / 100)
+            shares = lot * 100
+            if lot < 1:
+                print(f"Lot: {lot}")
+                print(f"Shares: {shares}")
+                print(f"Amount not enough for {obj.emiten}")
+                msg = user["email"] + ": amount not enough"
+                LOG.append(msg)
+                return
+            
+            price = float(obj.buy_price) + (tick(float(obj.buy_price)) * 3)
+            print(f"Price: {int(price)}")
+        
+            res = brokers.stockbit.buy.call(access_token, obj.emiten, int(price), int(shares))
             if res.status_code == 200:
-                msg = user["email"] + ": order buy " + obj.emiten + " sent"
+                msg = user["email"] + ": order buy success: " + obj.emiten + " with id " + res.json()['data']['order_id']
                 print(msg)
                 LOG.append(msg)
                 print(res.json())
             else:
-                msg = user["email"] + ": order buy " + obj.emiten + " error: " + res.text
+                msg = user["email"] + ": order buy failed: " + obj.emiten + " error: " + res.text
                 LOG.append(msg)
         
-        do_logout(access_token, user)
+        # do_logout(access_token_sekuritas, user)
     else:
-        msg = user["email"] + ": login error when buy"
+        msg = user["email"] + ": login failed when buy"
         LOG.append(msg)
 
 def sell(user, list_order):
+    print(f"Attempting to sell for user: {user['email']}")
     LOG.append("Order Sell Report:")
+    LOG.append(f"Starting sell operation for user: {user['email']}")
+    
     login_status, access_token = do_login(user)
     if login_status:
+        LOG.append(f"Login successful for user: {user['email']}")
         portfolio = get_portfolio(access_token, user)
         if isinstance(portfolio, list) and portfolio != []:
-            check_position(access_token, portfolio, user)
+            print(f"Portfolio retrieved successfully. Found {len(portfolio)} positions.")
+            LOG.append(f"Portfolio retrieved successfully. Found {len(portfolio)} positions.")
+            # check_position(access_token, portfolio, user)
 
             for obj in list_order:
                 emiten = obj.emiten
-                tp = obj.take_profit
-                cl = obj.cut_loss
-                dicts = [i for i in portfolio if i['stock'] == emiten]
+                take_profit = int(obj.take_profit)
+                cut_loss = int(obj.cut_loss)
+                
+                msg = f"\nProcessing order for {emiten}:"
+                msg += f"\n- Take Profit target: {take_profit}"
+                msg += f"\n- Cut Loss target: {cut_loss}"
+                LOG.append(msg)
+                print(msg)
+                
+                dicts = [i for i in portfolio if i['symbol'] == emiten]
                 
                 if dicts != []:
-                    lot = dicts[0]["lot"]
-                    res = brokers.ajaib.order.create_sell(access_token, emiten, tp, lot, "GTE")
+                    position = dicts[0]
+                    lot = position["qty"]["available"]["lot"]
+                    shares = str(lot * 100)
+                    current_price = position["price"]["latest"]
+                    
+                    msg = f"Position found for {emiten}:"
+                    msg += f"\n- Available lots: {lot}"
+                    msg += f"\n- Shares: {shares}"
+                    msg += f"\n- Current price: {current_price}"
+                    LOG.append(msg)
+                    print(msg)
+                    
+                    msg = f"Attempting to set Take Profit order for {emiten}"
+                    LOG.append(msg)
+                    print(msg)
+                    
+                    res = brokers.stockbit.sell.call(access_token, emiten, take_profit, shares, "TP")
+                    
                     if res.status_code == 200:
-                        msg = user["email"] + ": set TP " + emiten + " sent"
+                        msg = f"{user['email']}: Take Profit order set for {emiten}"
+                        msg += f"\n- Lots: {lot}"
+                        msg += f"\n- Shares: {shares}"
+                        msg += f"\n- TP Price: {take_profit}"
+
                         LOG.append(msg)
                         print(msg)
                         print(res.json())
 
                         time.sleep(3)
-
-                        res = brokers.ajaib.order.create_sell(access_token, emiten, cl, lot, "LTE")
+                        
+                        LOG.append(f"Attempting to set Cut Loss order for {emiten}")
+                        res = brokers.stockbit.sell.call(access_token, emiten, cut_loss, shares, "SL")
                         if res.status_code == 200:
-                            msg = user["email"] + ": set CL " + emiten + " sent"
+                            msg = f"{user['email']}: Cut Loss order set for {emiten}"
+                            msg += f"\n- Lots: {lot}"
+                            msg += f"\n- Shares: {shares}"
+                            msg += f"\n- CL Price: {cut_loss}"
+
                             LOG.append(msg)
                             print(msg)
                             print(res.json())
                         else:
-                            msg = user["email"] + ": set CL error: " + res.text
+                            msg = f"{user['email']}: Cut Loss order failed for {emiten}"
+                            msg += f"\n- Error: {res.text}"
+                            msg += f"\n- Status Code: {res.status_code}"
+                            
+                            print(msg)
                             LOG.append(msg)
                     else:
-                        msg = user["email"] + ": set TP error: " + res.text
+                        msg = f"{user['email']}: Take Profit order failed for {emiten}"
+                        msg += f"\n- Error: {res.text}"
+                        msg += f"\n- Status Code: {res.status_code}"
+                        
+                        print(msg)
                         LOG.append(msg)
                 else:
-                    LOG.append(user["email"] + ": setup sell " + emiten + " failed, not exists in portolio")
+                    msg = f"{user['email']}: Cannot setup sell orders for {emiten} - Position not found in portfolio"
+                    print(msg)
+                    LOG.append(msg)
         else:
-            msg = user["email"] + ": portfolio is empty"
+            msg = f"{user['email']}: Portfolio is empty or could not be retrieved"
+            print(msg)
             LOG.append(msg)
             
+        print(f"Logging out user: {user['email']}")
+        LOG.append(f"Logging out user: {user['email']}")
         do_logout(access_token, user)
     else:
-        msg = user["email"] + ": login error when sell"
+        msg = f"{user['email']}: Login failed - Unable to proceed with sell orders"
+        print(msg)
         LOG.append(msg)
     
 def async_order(order_type, list_order, bot):
@@ -290,6 +409,8 @@ def async_order(order_type, list_order, bot):
                 else:
                     print(f"{user['email']}: RESULT ERROR")
                     print(f"Error details: {result}")
+                    _, _, tele_log_id = get_tele_data()
+                    error_log(bot, tele_log_id)
             except Exception as e:
                 print(f"Exception while processing future for {user['email']}: {str(e)}")
                 _, _, tele_log_id = get_tele_data()

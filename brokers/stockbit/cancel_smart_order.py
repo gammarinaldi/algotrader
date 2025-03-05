@@ -1,18 +1,18 @@
 import requests
 import json
 
-def call(user, security_token):
+def call(access_token_sekuritas, id):
     try:
-        url = "https://carina.stockbit.com/auth/v2/login"
-                
+        url = "https://carina.stockbit.com/smart-order"
+        
         payload = json.dumps({
-            "login_token": security_token,
-            "pin": user['pin']
+            "id": id
         })
         
         headers = {
-           'accept': 'application/json',
+            'accept': 'application/json',
             'accept-language': 'en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7',
+            'authorization': 'Bearer ' + access_token_sekuritas,
             'content-type': 'application/json',
             'dnt': '1',
             'origin': 'https://stockbit.com',
@@ -38,3 +38,4 @@ def call(user, security_token):
         return "Timeout Error: ", errt
     except requests.exceptions.RequestException as err:
         return "Oops.. Something Else: ", err
+    

@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
-list = [{"email": os.getenv('AJ_USER'), "password": os.getenv('AJ_PASS'), "pin": os.getenv('AJ_PIN')}]
+list = [{"email": os.getenv('USERNAME'), "password": os.getenv('PASSWORD'), "pin": os.getenv('PIN')}]
