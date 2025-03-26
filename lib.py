@@ -19,6 +19,7 @@ import brokers.stockbit.trade_list
 import brokers.stockbit.buy
 import brokers.stockbit.sell
 import brokers.stockbit.logout
+import brokers.stockbit.orderbook
 
 import concurrent.futures
 import csv
@@ -28,6 +29,7 @@ import traceback
 import os
 import time
 import users
+import stocks
 import asyncio
 from math import floor
 
@@ -35,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 LOG = []
 
@@ -245,7 +247,7 @@ def position_size(access_token, user):
     if buying_power_res.status_code == 200:
         data_buying_power = buying_power_res.json()
         trading_limit = data_buying_power['data']['summary']['trading']['balance']
-        amount = trading_limit / 3
+        amount = trading_limit / 5
         return amount
     else:
         msg = user["email"] + ": get position size error: " + buying_power_res.text
@@ -302,7 +304,7 @@ def sell(user, list_order):
         if isinstance(portfolio, list) and portfolio != []:
             print(f"Portfolio retrieved successfully. Found {len(portfolio)} positions.")
             LOG.append(f"Portfolio retrieved successfully. Found {len(portfolio)} positions.")
-            # check_position(access_token, portfolio, user)
+            check_position(access_token, portfolio, user)
 
             for obj in list_order:
                 emiten = obj.emiten
@@ -433,6 +435,31 @@ def tick(price):
         return 10
     else: 
         return 25
+    
+def ara_hunter():
+    [user] = users.list
+    login_status, access_token = do_login(user)
+    if login_status:
+        for symbol in stocks.list:
+            res = brokers.stockbit.orderbook.call(access_token, symbol)
+            if res.status_code == 200:
+                data = res.json()["data"]
+                ara_raw = data["next_ara"]
+                ara = int(ara_raw.replace(",", ""))
+                lastprice = data["lastprice"]
+                
+                if lastprice == ara - (2*tick(ara)):
+                    shares = 100
+                    res = brokers.stockbit.buy.call(access_token, symbol, ara, shares)
+                    if res.status_code == 200:
+                        msg = user["email"] + ": order buy success: " + symbol + " with id " + res.json()['data']['order_id']
+                        print(msg)
+                        LOG.append(msg)
+                        
+                        
+                    else:
+                        msg = user["email"] + ": order buy failed: " + symbol + " error: " + res.text
+                        LOG.append(msg)
 
 async def send_telegram_message(bot, chat_id, message):
     await bot.send_message(chat_id=chat_id, text=message)
