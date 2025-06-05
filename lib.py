@@ -29,7 +29,6 @@ import traceback
 import os
 import time
 import users
-import stocks
 import asyncio
 from math import floor
 
@@ -584,32 +583,6 @@ def tick(price):
         return 10
     else: 
         return 25
-
-def ara_hunter():
-    """
-    Monitors and executes trades based on ARA (Auto Rejection Area) conditions.
-    """
-    [user] = users.list
-    login_status, access_token = do_login(user)
-    if login_status:
-        for symbol in stocks.list:
-            res = brokers.stockbit.orderbook.call(access_token, symbol)
-            if res.status_code == 200:
-                data = res.json()["data"]
-                ara_raw = data["next_ara"]
-                ara = int(ara_raw.replace(",", ""))
-                lastprice = data["lastprice"]
-                
-                if lastprice == ara - (2*tick(ara)):
-                    shares = 100
-                    res = brokers.stockbit.buy.call(access_token, symbol, ara, shares)
-                    if res.status_code == 200:
-                        msg = user["email"] + ": order buy success: " + symbol + " with id " + res.json()['data']['order_id']
-                        print(msg)
-                        LOG.append(msg)
-                    else:
-                        msg = user["email"] + ": order buy failed: " + symbol + " error: " + res.text
-                        LOG.append(msg)
 
 async def send_telegram_message(bot, chat_id, message):
     """
