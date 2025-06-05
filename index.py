@@ -67,7 +67,7 @@ if __name__ == '__main__':
             # Perform auto order sell
             if enable_sell == "TRUE":
                 print('Wait 1 hour to create auto sell order')
-                time.sleep(3600)
+                time.sleep(int(sell_delay))
 
                 t1 = time.time()
 

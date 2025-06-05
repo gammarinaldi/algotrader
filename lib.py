@@ -42,6 +42,15 @@ load_dotenv(override=True)
 LOG = []
 
 class data_order():
+    """
+    A class to represent an order with its parameters.
+    
+    Attributes:
+        emiten (str): The stock symbol
+        buy_price (float): The price at which to buy
+        take_profit (float): The target price for taking profit
+        cut_loss (float): The price at which to cut losses
+    """
     def __init__(self, emiten, buy_price, take_profit, cut_loss):
         self.emiten = emiten
         self.buy_price = buy_price
@@ -49,12 +58,38 @@ class data_order():
         self.cut_loss = cut_loss
 
 def get_env():
+    """
+    Retrieves environment variables for trading configuration.
+    
+    Returns:
+        tuple: A tuple containing:
+            - ENABLE_SIGNAL (str): Whether to enable signal notifications
+            - ENABLE_BUY (str): Whether to enable buy orders
+            - ENABLE_SELL (str): Whether to enable sell orders
+            - SELL_DELAY (str): Delay in seconds before executing sell orders
+            - DIR_PATH (str): Directory path for storing data
+    """
     return os.getenv('ENABLE_SIGNAL'), os.getenv('ENABLE_BUY'), os.getenv('ENABLE_SELL'), os.getenv('SELL_DELAY'), os.getenv('DIR_PATH') 
 
 def get_dir_path():
+    """
+    Retrieves the directory path from environment variables.
+    
+    Returns:
+        str: The directory path for storing data
+    """
     return os.getenv('DIR_PATH')
 
 def get_tele_data():
+    """
+    Retrieves Telegram configuration data from environment variables.
+    
+    Returns:
+        tuple: A tuple containing:
+            - tele_bot_token (str): The Telegram bot token
+            - tele_chat_ids (list): List of Telegram chat IDs for notifications
+            - tele_log_id (str): Telegram chat ID for logging
+    """
     tele_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
     tele_chat_ids = [os.getenv('TELEGRAM_CHAT_ID_WINA'), os.getenv('TELEGRAM_CHAT_ID_SINYALA')]
     tele_log_id = os.getenv('TELEGRAM_LOGGER_ID')
@@ -62,11 +97,29 @@ def get_tele_data():
     return tele_bot_token, tele_chat_ids, tele_log_id
 
 def get_tele_bot():
+    """
+    Creates and returns a Telegram bot instance with configuration.
+    
+    Returns:
+        tuple: A tuple containing:
+            - bot (telegram.Bot): The configured Telegram bot instance
+            - tele_chat_ids (list): List of chat IDs for notifications
+            - tele_log_id (str): Chat ID for logging
+    """
     tele_bot_token, tele_chat_ids, tele_log_id = get_tele_data()
     bot = telegram.Bot(token=tele_bot_token)
     return bot, tele_chat_ids, tele_log_id
 
 def is_empty_csv(path):
+    """
+    Checks if a CSV file is empty or contains only a header.
+    
+    Args:
+        path (str): Path to the CSV file
+        
+    Returns:
+        bool: True if file is empty or has only header, False otherwise
+    """
     with open(path) as csvfile:
         reader = csv.reader(csvfile)
         for i, _ in enumerate(reader):
@@ -75,6 +128,12 @@ def is_empty_csv(path):
     return True
 
 def get_result():
+    """
+    Reads and processes trading signals from the result CSV file.
+    
+    Returns:
+        list or str: List of trading signals if available, or error message if no signals
+    """
     dir_path = get_dir_path()
     with open(f"{dir_path}\\signals\\result.csv", "r") as file:
         csvreader = csv.reader(file)
@@ -88,9 +147,6 @@ def get_result():
                     emiten = emiten.replace(".JK", "")
 
                 signal_date = row[1].split(" ")[0]
-                # close = row[2]
-                # change = row[3]
-                # trx = row[4]
                 buy_price = row[5]
                 take_profit = row[6]
                 cut_loss = row[7]
@@ -104,12 +160,20 @@ def get_result():
             return msg
 
 def do_login(user):
+    """
+    Performs login process for a user.
+    
+    Args:
+        user (dict): User credentials containing email and password
+        
+    Returns:
+        tuple: (bool, str) - Login status and access token if successful
+    """
     try:
         print(f"Attempting login for user: {user['email']}")
         res = brokers.stockbit.login.call(user['email'], user['password'])
         print(f"Login response received for {user['email']}")
         
-        # Handle tuple response which indicates connection error
         if isinstance(res, tuple):
             error_msg = f"Connection error for {user['email']}: {res[1]}"
             print(error_msg)
@@ -151,8 +215,18 @@ def do_login(user):
         LOG.append(error_msg)
         print(f"Exception type: {type(e)}")
         return False, None
-    
+
 def get_security_token(user, access_token):
+    """
+    Retrieves security token for a user.
+    
+    Args:
+        user (dict): User information
+        access_token (str): Initial access token
+        
+    Returns:
+        tuple: (bool, str) - Success status and security token if successful
+    """
     print(f"Attempting get security token for user: {user['email']}")
     res = brokers.stockbit.get_security_token.call(access_token)
     if res.status_code == 200:
@@ -160,8 +234,18 @@ def get_security_token(user, access_token):
         return True, res.json()['data']['token']
     else:
         return False, None
-    
+
 def do_login_security(user, security_token):
+    """
+    Performs security login process.
+    
+    Args:
+        user (dict): User information
+        security_token (str): Security token
+        
+    Returns:
+        tuple: (bool, str) - Success status and access token if successful
+    """
     print(f"Attempting login security for user: {user['email']}")
     res = brokers.stockbit.login_security.call(user, security_token)
     if res.status_code == 200:
@@ -171,6 +255,13 @@ def do_login_security(user, security_token):
         return False, None
 
 def do_logout(access_token_sekuritas, user):
+    """
+    Performs logout process for a user.
+    
+    Args:
+        access_token_sekuritas (str): Security access token
+        user (dict): User information
+    """
     print(f"Attempting logout for user: {user['email']}")
     res = brokers.stockbit.logout.call(access_token_sekuritas)
     if res.status_code == 200:
@@ -183,6 +274,12 @@ def do_logout(access_token_sekuritas, user):
         LOG.append(msg)
 
 def get_signal_history():
+    """
+    Retrieves trading signal history from CSV file.
+    
+    Returns:
+        list: List of historical trading signals
+    """
     dir_path = get_dir_path()
     with open(f"{dir_path}\\signals\\history.csv", "r") as file:
         csvreader = csv.reader(file)
@@ -194,45 +291,45 @@ def get_signal_history():
         file.close()
     return list
 
-def check_position(access_token_sekuritas, portofolio_dicts, user):
-    print('Check position...')
+def cancel_smart_order(access_token_sekuritas, portofolio_dicts, user):
+    """
+    Cancel unused smart order for stock that already sold.
+    
+    Args:
+        access_token_sekuritas (str): Security access token
+        portofolio_dicts (list): List of portfolio positions
+        user (dict): User information
+    """
+    print('Process cancel smart order...')
     res = brokers.stockbit.order_list.call(access_token_sekuritas)
     if res.status_code == 200:
         data = res.json()
         order_list_dicts = data['data']
-
-        for item in portofolio_dicts:
-            emiten = item['symbol']
-            lot = int(item['qty']['available']['lot'])
-            dicts = [i for i in order_list_dicts if i['symbol'] == emiten]
-            
-            if len(dicts) == 2:
-                print(emiten + ': Position ok')
-            elif len(dicts) == 1:
-                signal_history_dicts = [i for i in get_signal_history() if i[0] == emiten]
-                
-                for item in signal_history_dicts[-1]:
-                    history_emiten = item[0]
-                    history_take_profit = item[3]
-                    history_cut_loss = item[4]
-                    
-                    if history_emiten == emiten:
-                        smart_order_type = dicts[0]['smart_order']['label']
-                        if smart_order_type == 'TP':
-                            print('Re-create auto sell for take profit')
-                            brokers.stockbit.sell.call(access_token_sekuritas, emiten, history_take_profit, lot, "TP")
-                        else:
-                            print('Re-create auto sell for cut loss')
-                            brokers.stockbit.sell.call(access_token_sekuritas, emiten, history_cut_loss, lot, "SL")
-            else:
-                print('Remove unused auto trade setup')
-                for order in order_list_dicts:
-                    brokers.stockbit.cancel_smart_order.call(access_token_sekuritas, order['smart_order']['order_id'])
+        
+        # Get list of symbols from portfolio
+        portfolio_symbols = [item['symbol'] for item in portofolio_dicts]
+        
+        # First, cancel orders for symbols not in portfolio
+        for order in order_list_dicts:
+            if order['symbol'] not in portfolio_symbols:
+                print(f"Cancelling order for {order['symbol']} - Symbol not in portfolio")
+                brokers.stockbit.cancel_smart_order.call(access_token_sekuritas, order['smart_order']['order_id'])
+                continue
     else:
-        msg = user["email"] + ": check position error: " + res.text
+        msg = user["email"] + ": cancel smart order error: " + res.text
         LOG.append(msg)
 
 def get_portfolio(access_token, user):
+    """
+    Retrieves user's portfolio information.
+    
+    Args:
+        access_token (str): Access token
+        user (dict): User information
+        
+    Returns:
+        list: List of portfolio positions
+    """
     print(f"Attempting get portfolio for user: {user['email']}")
     porto_res = brokers.stockbit.portfolio.call(access_token)
     if porto_res.status_code == 200:
@@ -242,6 +339,16 @@ def get_portfolio(access_token, user):
         LOG.append(msg)
 
 def position_size(access_token, user):
+    """
+    Calculates position size based on available buying power.
+    
+    Args:
+        access_token (str): Access token
+        user (dict): User information
+        
+    Returns:
+        float: Calculated position size
+    """
     print(f"Attempting get position size for user: {user['email']}")
     buying_power_res = brokers.stockbit.get_buying_power.call(access_token)
     if buying_power_res.status_code == 200:
@@ -255,6 +362,13 @@ def position_size(access_token, user):
         return 0
 
 def buy(user, list_order):
+    """
+    Executes buy orders for a user.
+    
+    Args:
+        user (dict): User information
+        list_order (list): List of orders to execute
+    """
     print(f"Attempting to buy for user: {user['email']}")
     LOG.append("Order Buy Report:")
     login_status, access_token = do_login(user)
@@ -286,13 +400,18 @@ def buy(user, list_order):
             else:
                 msg = user["email"] + ": order buy failed: " + obj.emiten + " error: " + res.text
                 LOG.append(msg)
-        
-        # do_logout(access_token_sekuritas, user)
     else:
         msg = user["email"] + ": login failed when buy"
         LOG.append(msg)
 
 def sell(user, list_order):
+    """
+    Executes sell orders for a user.
+    
+    Args:
+        user (dict): User information
+        list_order (list): List of orders to execute
+    """
     print(f"Attempting to sell for user: {user['email']}")
     LOG.append("Order Sell Report:")
     LOG.append(f"Starting sell operation for user: {user['email']}")
@@ -304,8 +423,10 @@ def sell(user, list_order):
         if isinstance(portfolio, list) and portfolio != []:
             print(f"Portfolio retrieved successfully. Found {len(portfolio)} positions.")
             LOG.append(f"Portfolio retrieved successfully. Found {len(portfolio)} positions.")
-            check_position(access_token, portfolio, user)
-
+            
+            # Cancel smart order for stock that already sold
+            cancel_smart_order(access_token, portfolio, user)
+            
             for obj in list_order:
                 emiten = obj.emiten
                 take_profit = int(obj.take_profit)
@@ -391,8 +512,16 @@ def sell(user, list_order):
         msg = f"{user['email']}: Login failed - Unable to proceed with sell orders"
         print(msg)
         LOG.append(msg)
-    
+
 def async_order(order_type, list_order, bot):
+    """
+    Executes orders asynchronously for multiple users.
+    
+    Args:
+        order_type (str): Type of order ('buy' or 'sell')
+        list_order (list): List of orders to execute
+        bot (telegram.Bot): Telegram bot instance for notifications
+    """
     print(f"Starting async_order with type: {order_type}")
     print(f"Number of orders to process: {len(list_order)}")
     
@@ -419,12 +548,32 @@ def async_order(order_type, list_order, bot):
                 error_log(bot, tele_log_id)
 
 def executor_submit(order_type, executor, list_order):
+    """
+    Submits orders to the thread pool executor.
+    
+    Args:
+        order_type (str): Type of order ('buy' or 'sell')
+        executor (ThreadPoolExecutor): Thread pool executor instance
+        list_order (list): List of orders to execute
+        
+    Returns:
+        dict: Dictionary mapping futures to users
+    """
     if order_type == "buy":
         return {executor.submit(buy, user, list_order): user for user in users.list}
     else:
         return {executor.submit(sell, user, list_order): user for user in users.list}
 
 def tick(price):
+    """
+    Calculates the tick size for a given price.
+    
+    Args:
+        price (float): Stock price
+        
+    Returns:
+        int: Tick size based on price range
+    """
     if price <= 200: 
         return 1
     elif price > 200 and price <= 500: 
@@ -435,8 +584,11 @@ def tick(price):
         return 10
     else: 
         return 25
-    
+
 def ara_hunter():
+    """
+    Monitors and executes trades based on ARA (Auto Rejection Area) conditions.
+    """
     [user] = users.list
     login_status, access_token = do_login(user)
     if login_status:
@@ -455,16 +607,30 @@ def ara_hunter():
                         msg = user["email"] + ": order buy success: " + symbol + " with id " + res.json()['data']['order_id']
                         print(msg)
                         LOG.append(msg)
-                        
-                        
                     else:
                         msg = user["email"] + ": order buy failed: " + symbol + " error: " + res.text
                         LOG.append(msg)
 
 async def send_telegram_message(bot, chat_id, message):
+    """
+    Sends a message to a Telegram chat.
+    
+    Args:
+        bot (telegram.Bot): Telegram bot instance
+        chat_id (str): Telegram chat ID
+        message (str): Message to send
+    """
     await bot.send_message(chat_id=chat_id, text=message)
 
 def send_log(bot, chat_id, log):
+    """
+    Sends log messages to Telegram.
+    
+    Args:
+        bot (telegram.Bot): Telegram bot instance
+        chat_id (str): Telegram chat ID
+        log (list): List of log messages to send
+    """
     print("Attempting to send log messages")
     print(f"Number of log messages: {len(log)}")
     try:
@@ -486,16 +652,40 @@ def send_log(bot, chat_id, log):
         print(f"Exception type: {type(e)}")
 
 def join_msg(list):
+    """
+    Joins a list of messages into a single string.
+    
+    Args:
+        list (list): List of messages to join
+        
+    Returns:
+        str: Joined messages or empty message if list is empty
+    """
     if list:
         return '\n'.join(list)
     else:
         return "Message is empty"
 
 def send_msg_v2(bot, chat_ids, msg):
+    """
+    Sends a message to multiple Telegram chats.
+    
+    Args:
+        bot (telegram.Bot): Telegram bot instance
+        chat_ids (list): List of Telegram chat IDs
+        msg (str): Message to send
+    """
     for chat_id in chat_ids:
         bot.send_message(chat_id=chat_id, text=msg, parse_mode=telegram.ParseMode.MARKDOWN_V2)
 
 def error_log(bot, chat_id):
+    """
+    Sends error logs to Telegram.
+    
+    Args:
+        bot (telegram.Bot): Telegram bot instance
+        chat_id (str): Telegram chat ID
+    """
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
     error_msg = traceback.format_exc()

@@ -3,4 +3,5 @@
 amibroker
 __pycache__
 gsheet
-venv
+.venv
+*.csv

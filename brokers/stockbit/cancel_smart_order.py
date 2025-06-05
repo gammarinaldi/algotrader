@@ -1,7 +1,7 @@
 import requests
 import json
 
-def call(access_token_sekuritas, id):
+def call(access_token, id):
     try:
         url = "https://carina.stockbit.com/smart-order"
         
@@ -12,7 +12,7 @@ def call(access_token_sekuritas, id):
         headers = {
             'accept': 'application/json',
             'accept-language': 'en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7',
-            'authorization': 'Bearer ' + access_token_sekuritas,
+            'authorization': 'Bearer ' + access_token,
             'content-type': 'application/json',
             'dnt': '1',
             'origin': 'https://stockbit.com',
@@ -27,7 +27,8 @@ def call(access_token_sekuritas, id):
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.request("DELETE", url, headers=headers, data=payload)
+        breakpoint()
 
         return response
     except requests.exceptions.HTTPError as errh:
