@@ -1,5 +1,4 @@
 *.env
-*.bat
 amibroker
 __pycache__
 gsheet
