@@ -2,7 +2,6 @@ import csv
 import time
 import lib
 import os
-# import gsheet.process
 
 if __name__ == '__main__':
     print("Algotrader is starting...")
@@ -21,9 +20,6 @@ if __name__ == '__main__':
         if isinstance(result, str):
             print(result)
         else:
-            # Export signal to google sheet
-            # gsheet.process.write(result)
-            
             list_order = []
             for row in result:
                 emiten = row[0]
@@ -43,7 +39,8 @@ if __name__ == '__main__':
 
                 # Send signal to telegram
                 if enable_signal == "TRUE":
-                    lib.send_msg_v2(bot, tele_chat_ids, msg)
+                    if not lib.send_msg_v2(bot, tele_chat_ids, msg):
+                        print("Failed to send signal to Telegram")
 
                 # Input order parameters for auto order
                 list_order.append(lib.data_order(emiten, buy_price, take_profit, cut_loss))
@@ -56,13 +53,16 @@ if __name__ == '__main__':
                     t2 = time.time()
                     diff = t2 - t1
                     print("Processing auto-buy order takes: " + str(round(diff, 2)) + " secs.")
+                    
                     # Send logs in a single call
                     if lib.LOG:
-                        lib.send_log(bot, tele_log_id, lib.LOG)
+                        if not lib.send_log(bot, tele_log_id, lib.LOG):
+                            print("Failed to send buy order logs to Telegram")
                         lib.LOG = []
                 except Exception as e:
                     print(f"Error during buy order: {e}")
-                    lib.error_log(bot, tele_log_id)
+                    if not lib.error_log(bot, tele_log_id):
+                        print("Failed to send error log to Telegram")
 
             # Perform auto order sell
             if enable_sell == "TRUE":
@@ -76,12 +76,16 @@ if __name__ == '__main__':
 
                 t2 = time.time()
                 diff = t2 -t1
+                
                 print("Processing auto-sell order takes: " + str(round(diff, 2)) + " secs.")
-                lib.send_log(bot, tele_log_id, lib.LOG)
-                lib.LOG = []
+                if lib.LOG:
+                    if not lib.send_log(bot, tele_log_id, lib.LOG):
+                        print("Failed to send sell order logs to Telegram")
+                    lib.LOG = []
     except Exception as error:
         print(error)
-        lib.error_log(bot, tele_log_id)
+        if not lib.error_log(bot, tele_log_id):
+            print("Failed to send error log to Telegram")
 
     print("Done.")
 

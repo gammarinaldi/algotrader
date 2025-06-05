@@ -80,7 +80,7 @@ def get_dir_path():
     """
     return os.getenv('DIR_PATH')
 
-def get_tele_data():
+def get_tele_config():
     """
     Retrieves Telegram configuration data from environment variables.
     
@@ -91,7 +91,7 @@ def get_tele_data():
             - tele_log_id (str): Telegram chat ID for logging
     """
     tele_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-    tele_chat_ids = [os.getenv('TELEGRAM_CHAT_ID_WINA'), os.getenv('TELEGRAM_CHAT_ID_SINYALA')]
+    tele_chat_ids = [os.getenv('TELEGRAM_CHAT_ID_WINA')]
     tele_log_id = os.getenv('TELEGRAM_LOGGER_ID')
 
     return tele_bot_token, tele_chat_ids, tele_log_id
@@ -106,7 +106,7 @@ def get_tele_bot():
             - tele_chat_ids (list): List of chat IDs for notifications
             - tele_log_id (str): Chat ID for logging
     """
-    tele_bot_token, tele_chat_ids, tele_log_id = get_tele_data()
+    tele_bot_token, tele_chat_ids, tele_log_id = get_tele_config()
     bot = telegram.Bot(token=tele_bot_token)
     return bot, tele_chat_ids, tele_log_id
 
@@ -155,7 +155,7 @@ def get_result():
         else:
             msg = "No signal for today"
             bot, tele_chat_ids, _ = get_tele_bot()
-            if os.getenv('ENABLE_SIGNAL') == "1":
+            if os.getenv('ENABLE_SIGNAL') == "TRUE":
                 send_msg_v2(bot, tele_chat_ids, msg)
             return msg
 
@@ -619,8 +619,16 @@ async def send_telegram_message(bot, chat_id, message):
         bot (telegram.Bot): Telegram bot instance
         chat_id (str): Telegram chat ID
         message (str): Message to send
+        
+    Returns:
+        bool: True if message was sent successfully, False otherwise
     """
-    await bot.send_message(chat_id=chat_id, text=message)
+    try:
+        await bot.send_message(chat_id=chat_id, text=message)
+        return True
+    except Exception as e:
+        print(f"Error sending Telegram message: {str(e)}")
+        return False
 
 def send_log(bot, chat_id, log):
     """
@@ -630,26 +638,43 @@ def send_log(bot, chat_id, log):
         bot (telegram.Bot): Telegram bot instance
         chat_id (str): Telegram chat ID
         log (list): List of log messages to send
+        
+    Returns:
+        bool: True if all messages were sent successfully, False otherwise
     """
+    if not log:
+        print("No log messages to send")
+        return True
+        
     print("Attempting to send log messages")
     print(f"Number of log messages: {len(log)}")
+    
     try:
         message = join_msg(log)
+        if not message or message == "Message is empty":
+            print("No valid messages to send")
+            return True
+            
         print(f"Combined message length: {len(message)}")
+        
         # Split message if too long (Telegram has a 4096 character limit)
         max_length = 4000  # Leave some margin
         if len(message) > max_length:
             print("Message too long, splitting into chunks")
             chunks = [message[i:i+max_length] for i in range(0, len(message), max_length)]
+            success = True
             for i, chunk in enumerate(chunks):
                 print(f"Sending chunk {i+1}/{len(chunks)}")
-                asyncio.run(send_telegram_message(bot, chat_id, chunk))
+                if not asyncio.run(send_telegram_message(bot, chat_id, chunk)):
+                    success = False
+            return success
         else:
             print("Sending single message")
-            asyncio.run(send_telegram_message(bot, chat_id, message))
+            return asyncio.run(send_telegram_message(bot, chat_id, message))
     except Exception as e:
         print(f"Error sending log: {str(e)}")
         print(f"Exception type: {type(e)}")
+        return False
 
 def join_msg(list):
     """
@@ -661,10 +686,15 @@ def join_msg(list):
     Returns:
         str: Joined messages or empty message if list is empty
     """
-    if list:
-        return '\n'.join(list)
-    else:
+    if not list:
         return "Message is empty"
+        
+    # Filter out None and empty strings
+    valid_messages = [msg for msg in list if msg and isinstance(msg, str)]
+    if not valid_messages:
+        return "Message is empty"
+        
+    return '\n'.join(valid_messages)
 
 def send_msg_v2(bot, chat_ids, msg):
     """
@@ -674,9 +704,22 @@ def send_msg_v2(bot, chat_ids, msg):
         bot (telegram.Bot): Telegram bot instance
         chat_ids (list): List of Telegram chat IDs
         msg (str): Message to send
+        
+    Returns:
+        bool: True if message was sent to all chats successfully, False otherwise
     """
+    if not msg or not isinstance(msg, str):
+        print("Invalid message format")
+        return False
+        
+    success = True
     for chat_id in chat_ids:
-        bot.send_message(chat_id=chat_id, text=msg, parse_mode=telegram.ParseMode.MARKDOWN_V2)
+        try:
+            bot.send_message(chat_id=chat_id, text=msg, parse_mode=telegram.ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            print(f"Error sending message to chat {chat_id}: {str(e)}")
+            success = False
+    return success
 
 def error_log(bot, chat_id):
     """
@@ -685,9 +728,16 @@ def error_log(bot, chat_id):
     Args:
         bot (telegram.Bot): Telegram bot instance
         chat_id (str): Telegram chat ID
+        
+    Returns:
+        bool: True if error log was sent successfully, False otherwise
     """
-    logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger(__name__)
-    error_msg = traceback.format_exc()
-    logger.debug(error_msg)
-    asyncio.run(send_telegram_message(bot, chat_id, error_msg))
+    try:
+        logging.basicConfig(level=logging.DEBUG)
+        logger = logging.getLogger(__name__)
+        error_msg = traceback.format_exc()
+        logger.debug(error_msg)
+        return asyncio.run(send_telegram_message(bot, chat_id, error_msg))
+    except Exception as e:
+        print(f"Error sending error log: {str(e)}")
+        return False
