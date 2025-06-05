@@ -540,11 +540,11 @@ def async_order(order_type, list_order, bot):
                 else:
                     print(f"{user['email']}: RESULT ERROR")
                     print(f"Error details: {result}")
-                    _, _, tele_log_id = get_tele_data()
+                    _, _, tele_log_id = get_tele_config()
                     error_log(bot, tele_log_id)
             except Exception as e:
                 print(f"Exception while processing future for {user['email']}: {str(e)}")
-                _, _, tele_log_id = get_tele_data()
+                _, _, tele_log_id = get_tele_config()
                 error_log(bot, tele_log_id)
 
 def executor_submit(order_type, executor, list_order):
