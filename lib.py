@@ -353,7 +353,7 @@ def position_size(access_token, user):
     if buying_power_res.status_code == 200:
         data_buying_power = buying_power_res.json()
         trading_limit = data_buying_power['data']['summary']['trading']['balance']
-        amount = trading_limit / 5
+        amount = trading_limit * 0.2  # 20% allocation per trade
         return amount
     else:
         msg = user["email"] + ": get position size error: " + buying_power_res.text
