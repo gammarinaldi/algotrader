@@ -31,6 +31,7 @@ import time
 import users
 import asyncio
 from math import floor
+from datetime import datetime
 
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
@@ -46,12 +47,14 @@ class data_order():
     
     Attributes:
         emiten (str): The stock symbol
+        signal_date (str): The date of the signal
         buy_price (float): The price at which to buy
         take_profit (float): The target price for taking profit
         cut_loss (float): The price at which to cut losses
     """
-    def __init__(self, emiten, buy_price, take_profit, cut_loss):
+    def __init__(self, emiten, signal_date, buy_price, take_profit, cut_loss):
         self.emiten = emiten
+        self.signal_date = signal_date
         self.buy_price = buy_price
         self.take_profit = take_profit
         self.cut_loss = cut_loss
@@ -340,20 +343,25 @@ def get_portfolio(access_token, user):
 def position_size(access_token, user):
     """
     Calculates position size based on available buying power.
+    Allocation percentage is set in ALLOCATION_PER_TRADE environment variable.
     
     Args:
         access_token (str): Access token
         user (dict): User information
         
     Returns:
-        float: Calculated position size
+        float: Calculated position size based on ALLOCATION_PER_TRADE percentage
     """
     print(f"Attempting get position size for user: {user['email']}")
     buying_power_res = brokers.stockbit.get_buying_power.call(access_token)
     if buying_power_res.status_code == 200:
         data_buying_power = buying_power_res.json()
-        trading_limit = data_buying_power['data']['summary']['trading']['balance']
-        amount = trading_limit * 0.2  # 20% allocation per trade
+        trading_limit = float(data_buying_power['data']['summary']['trading']['balance'])
+        allocation_percentage = float(os.getenv('ALLOCATION_PER_TRADE', '0.1'))  # Default to 0.1 if not set
+        amount = floor(trading_limit * allocation_percentage)
+        print(f"Available buying power: {trading_limit}")
+        print(f"Allocation percentage: {allocation_percentage * 100}%")
+        print(f"Allocated amount: {amount}")
         return amount
     else:
         msg = user["email"] + ": get position size error: " + buying_power_res.text
@@ -370,22 +378,40 @@ def buy(user, list_order):
     """
     print(f"Attempting to buy for user: {user['email']}")
     LOG.append("Order Buy Report:")
+    
     login_status, access_token = do_login(user)
     
     if login_status:
-        amount = position_size(access_token, user)
+        amount = round(position_size(access_token, user))
         print(f"Amount: {amount}")
 
         for obj in list_order:
-            lot = floor(( amount / float(obj.buy_price)) / 100)
-            shares = lot * 100
-            if lot < 1:
-                print(f"Lot: {lot}")
-                print(f"Shares: {shares}")
-                print(f"Amount not enough for {obj.emiten}")
-                msg = user["email"] + ": amount not enough"
-                LOG.append(msg)
-                return
+            # Validate signal date
+            try:
+                signal_date = datetime.strptime(obj.signal_date, '%m/%d/%Y')
+                current_date = datetime.now()
+                
+                # Compare only date part (ignore time)
+                if signal_date.date() != current_date.date():
+                    msg = f"Order for {obj.emiten} is expired. Signal date: {obj.signal_date}, Current date: {current_date.strftime('%m/%d/%Y')}"
+                    print(msg)
+                    LOG.append(msg)
+                    continue
+                    
+                lot = floor(( amount / float(obj.buy_price)) / 100)
+                shares = lot * 100
+                if lot < 1:
+                    print(f"Lot: {lot}")
+                    print(f"Shares: {shares}")
+                    print(f"Amount not enough for {obj.emiten}")
+                    msg = user["email"] + ": amount not enough"
+                    LOG.append(msg)
+                    return
+            
+            except Exception as e:
+                print(f"Error parsing signal date: {str(e)}")
+                LOG.append(f"Error parsing signal date: {str(e)}")
+                continue
             
             # Buy 2 tick from market price
             price = float(obj.buy_price) + (tick(float(obj.buy_price)) * 2)

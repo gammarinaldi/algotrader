@@ -43,7 +43,7 @@ if __name__ == '__main__':
                         print("Failed to send signal to Telegram")
 
                 # Input order parameters for auto order
-                list_order.append(lib.data_order(emiten, buy_price, take_profit, cut_loss))
+                list_order.append(lib.data_order(emiten, signal_date, buy_price, take_profit, cut_loss))
 
             # Perform auto order buy
             if enable_buy == "TRUE":
