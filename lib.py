@@ -387,7 +387,7 @@ def buy(user, list_order):
                 LOG.append(msg)
                 return
             
-            price = float(obj.buy_price) + (tick(float(obj.buy_price)) * 3)
+            price = float(obj.buy_price) + (tick(float(obj.buy_price)) * 2)
             print(f"Price: {int(price)}")
         
             res = brokers.stockbit.buy.call(access_token, obj.emiten, int(price), int(shares))

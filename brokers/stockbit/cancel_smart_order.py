@@ -28,7 +28,6 @@ def call(access_token, id):
         }
 
         response = requests.request("DELETE", url, headers=headers, data=payload)
-        breakpoint()
 
         return response
     except requests.exceptions.HTTPError as errh:
