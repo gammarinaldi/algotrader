@@ -18,15 +18,21 @@ def is_holiday():
         year = today.year
         
         # Call holiday API
-        response = requests.get(f"https://api-harilibur.vercel.app/api?month={month}&year={year}")
+        response = requests.get(f"https://dayoffapi.vercel.app/api?month={month}&year={year}")
         if response.status_code == 200:
             holidays = response.json()
             today_str = today.strftime("%Y-%m-%d")
             
             # Check if today is in the holiday list
             for holiday in holidays:
-                if holiday["holiday_date"] == today_str and holiday["is_national_holiday"]:
-                    print(f"Today is a holiday: {holiday['holiday_name']}")
+                # Convert holiday date to match format (add leading zero if needed)
+                holiday_date = holiday["tanggal"]
+                if len(holiday_date.split("-")[2]) == 1:  # If day is single digit
+                    parts = holiday_date.split("-")
+                    holiday_date = f"{parts[0]}-{parts[1]}-0{parts[2]}"
+                
+                if holiday_date == today_str:
+                    print(f"Today is a holiday: {holiday['keterangan']}")
                     return True
         return False
     except Exception as e:
@@ -35,10 +41,10 @@ def is_holiday():
 
 if __name__ == '__main__':
     print("Algotrader is starting...")
-
+    
     # Check if today is a holiday
     if is_holiday():
-        print("Today is a holiday. Skipping trading process.")
+        print("Happy holiday :) Skipping trading process.")
         exit()
 
     bot, tele_chat_ids, tele_log_id = lib.get_tele_bot()
