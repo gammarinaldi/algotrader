@@ -2,9 +2,44 @@ import csv
 import time
 import lib
 import os
+import requests
+from datetime import datetime
+
+def is_holiday():
+    """
+    Check if today is a holiday using the holiday API.
+    
+    Returns:
+        bool: True if today is a holiday, False otherwise
+    """
+    try:
+        today = datetime.now()
+        month = today.month
+        year = today.year
+        
+        # Call holiday API
+        response = requests.get(f"https://api-harilibur.vercel.app/api?month={month}&year={year}")
+        if response.status_code == 200:
+            holidays = response.json()
+            today_str = today.strftime("%Y-%m-%d")
+            
+            # Check if today is in the holiday list
+            for holiday in holidays:
+                if holiday["holiday_date"] == today_str and holiday["is_national_holiday"]:
+                    print(f"Today is a holiday: {holiday['holiday_name']}")
+                    return True
+        return False
+    except Exception as e:
+        print(f"Error checking holiday: {str(e)}")
+        return False
 
 if __name__ == '__main__':
     print("Algotrader is starting...")
+
+    # Check if today is a holiday
+    if is_holiday():
+        print("Today is a holiday. Skipping trading process.")
+        exit()
 
     bot, tele_chat_ids, tele_log_id = lib.get_tele_bot()
     enable_signal, enable_buy, enable_sell, sell_delay, dir_path = lib.get_env()
