@@ -387,6 +387,7 @@ def buy(user, list_order):
                 LOG.append(msg)
                 return
             
+            # Buy 2 tick from market price
             price = float(obj.buy_price) + (tick(float(obj.buy_price)) * 2)
             print(f"Price: {int(price)}")
         
